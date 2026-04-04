@@ -133,6 +133,13 @@ from .todo_tool import (
     TodoStore,
 )
 
+# Shared cross-agent task board
+from .shared_task_tool import (
+    shared_task_tool,
+    check_shared_task_requirements,
+    SHARED_TASK_SCHEMA,
+)
+
 # Clarifying questions tool (interactive Q&A with the user)
 from .clarify_tool import (
     clarify_tool,
@@ -246,6 +253,10 @@ __all__ = [
     'check_todo_requirements',
     'TODO_SCHEMA',
     'TodoStore',
+    # Shared cross-agent task board
+    'shared_task_tool',
+    'check_shared_task_requirements',
+    'SHARED_TASK_SCHEMA',
     # Clarifying questions tool
     'clarify_tool',
     'check_clarify_requirements',

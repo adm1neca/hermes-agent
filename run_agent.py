@@ -557,6 +557,23 @@ class AIAgent:
         _install_safe_stdio()
 
         self.model = model
+        # Agent identity for the shared task board (coder / reviewer / human / etc.)
+        # Priority: HERMES_AGENT_NAME env var → config.agent.name → hostname fallback.
+        # Resolved lazily in the shared_task tool; stored here so it flows through
+        # handle_function_call → registry.dispatch → tool handler kwargs.
+        import os as _os, socket as _socket
+        _agent_name_env = _os.getenv("HERMES_AGENT_NAME", "").strip()
+        if _agent_name_env:
+            self.agent_name: str = _agent_name_env
+        else:
+            try:
+                from hermes_cli.config import load_config as _lc
+                _cfg = _lc()
+                _cfg_name = (_cfg.get("agent") or {}).get("name", "").strip()
+                self.agent_name = _cfg_name or _socket.gethostname()
+            except Exception:
+                self.agent_name = _socket.gethostname()
+        del _os, _socket
         self.max_iterations = max_iterations
         # Shared iteration budget — parent creates, children inherit.
         # Consumed by every LLM turn across parent + all subagents.
@@ -5457,6 +5474,7 @@ class AIAgent:
                 enabled_tools=list(self.valid_tool_names) if self.valid_tool_names else None,
                 honcho_manager=self._honcho,
                 honcho_session_key=self._honcho_session_key,
+                agent_name=getattr(self, "agent_name", None),
             )
 
     def _execute_tool_calls_concurrent(self, assistant_message, messages: list, effective_task_id: str, api_call_count: int = 0) -> None:
@@ -5825,6 +5843,7 @@ class AIAgent:
                         enabled_tools=list(self.valid_tool_names) if self.valid_tool_names else None,
                         honcho_manager=self._honcho,
                         honcho_session_key=self._honcho_session_key,
+                        agent_name=getattr(self, "agent_name", None),
                     )
                     _spinner_result = function_result
                 except Exception as tool_error:
@@ -5844,6 +5863,7 @@ class AIAgent:
                         enabled_tools=list(self.valid_tool_names) if self.valid_tool_names else None,
                         honcho_manager=self._honcho,
                         honcho_session_key=self._honcho_session_key,
+                        agent_name=getattr(self, "agent_name", None),
                     )
                 except Exception as tool_error:
                     function_result = f"Error executing tool '{function_name}': {tool_error}"

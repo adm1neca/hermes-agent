@@ -3646,6 +3646,24 @@ class HermesCLI:
         print(f"(._.) Unknown cron command: {subcommand}")
         print("  Available: list, add, edit, pause, resume, run, remove")
     
+    def _handle_today_command(self, cmd: str):
+        """Handle /today — render the shared team task board."""
+        import argparse
+        from hermes_cli.today import today_command
+
+        # Parse optional flags: /today --agent coder --status in_review --all
+        parts = cmd.split()[1:]  # strip the "/today" token
+        parser = argparse.ArgumentParser(prog="/today", add_help=False)
+        parser.add_argument("--agent", "-a", default=None)
+        parser.add_argument("--status", "-s", default=None)
+        parser.add_argument("--all", action="store_true", default=False)
+        try:
+            parsed, _ = parser.parse_known_args(parts)
+        except SystemExit:
+            parsed = parser.parse_args([])
+
+        today_command(parsed)
+
     def _handle_skills_command(self, cmd: str):
         """Handle /skills slash command — delegates to hermes_cli.skills_hub."""
         from hermes_cli.skills_hub import handle_skills_slash
@@ -3881,6 +3899,8 @@ class HermesCLI:
             self.save_conversation()
         elif canonical == "cron":
             self._handle_cron_command(cmd_original)
+        elif canonical == "today":
+            self._handle_today_command(cmd_original)
         elif canonical == "skills":
             with self._busy_command(self._slow_command_status(cmd_original)):
                 self._handle_skills_command(cmd_original)

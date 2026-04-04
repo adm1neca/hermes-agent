@@ -50,6 +50,8 @@ _HERMES_CORE_TOOLS = [
     "text_to_speech",
     # Planning & memory
     "todo", "memory",
+    # Shared cross-agent task board
+    "shared_task",
     # Session history search
     "session_search",
     # Clarifying questions
@@ -165,7 +167,13 @@ TOOLSETS = {
         "tools": ["todo"],
         "includes": []
     },
-    
+
+    "shared_tasks": {
+        "description": "Persistent shared task board — visible and writable by all agents",
+        "tools": ["shared_task"],
+        "includes": []
+    },
+
     "memory": {
         "description": "Persistent memory across sessions (personal notes + user profile)",
         "tools": ["memory"],
@@ -243,6 +251,7 @@ TOOLSETS = {
             "browser_press", "browser_close", "browser_get_images",
             "browser_vision", "browser_console",
             "todo", "memory",
+            "shared_task",
             "session_search",
             "execute_code", "delegate_task",
         ],

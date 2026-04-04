@@ -2490,6 +2490,12 @@ def cmd_cron(args):
     cron_command(args)
 
 
+def cmd_today(args):
+    """Show the team-wide shared task board."""
+    from hermes_cli.today import today_command
+    today_command(args)
+
+
 def cmd_webhook(args):
     """Webhook subscription management."""
     from hermes_cli.webhook import webhook_command
@@ -4104,6 +4110,32 @@ For more help on a command:
     cron_subparsers.add_parser("tick", help="Run due jobs once and exit")
 
     cron_parser.set_defaults(func=cmd_cron)
+
+    # =========================================================================
+    # today command
+    # =========================================================================
+    today_parser = subparsers.add_parser(
+        "today",
+        help="Show team-wide shared task board",
+        description="Display the shared persistent task board for all agents",
+    )
+    today_parser.add_argument(
+        "--agent", "-a",
+        default=None,
+        help="Filter by agent name (e.g. coder, reviewer, human)",
+    )
+    today_parser.add_argument(
+        "--status", "-s",
+        default=None,
+        help="Filter by task status (e.g. in_review, in_progress)",
+    )
+    today_parser.add_argument(
+        "--all",
+        action="store_true",
+        default=False,
+        help="Include completed and cancelled tasks",
+    )
+    today_parser.set_defaults(func=cmd_today)
 
     # =========================================================================
     # webhook command

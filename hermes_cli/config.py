@@ -208,6 +208,21 @@ DEFAULT_CONFIG = {
         # (force on/off for all models), or a list of model-name substrings
         # to match (e.g. ["gpt", "codex", "gemini", "qwen"]).
         "tool_use_enforcement": "auto",
+        # Agent identity for the shared task board.
+        # Set to e.g. "coder", "reviewer", or "human".
+        # Overridden by the HERMES_AGENT_NAME environment variable.
+        "name": "",
+    },
+
+    # Shared cross-agent task board settings.
+    "shared_tasks": {
+        # Map of agent_name → send_message target string for handover notifications.
+        # Format: "telegram:<chat_id>:<thread_id>" (or any platform target).
+        # Example:
+        #   coder:    "telegram:-100123456789:1001"
+        #   reviewer: "telegram:-100123456789:1002"
+        #   human:    "telegram:-100123456789:5"
+        "agent_notifications": {},
     },
     
     "terminal": {
