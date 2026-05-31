@@ -1,0 +1,35 @@
+model:
+  default: glm-5.1:cloud
+  provider: custom
+  context_length: 131072
+  base_url: http://host.docker.internal:11434/v1
+agent:
+  max_turns: 20
+  tool_use_enforcement: auto
+  verbose: false
+  reasoning_effort: low
+  system_prompt: "You are a web monitoring agent. Monitor URLs, detect changes, and send alerts. You may only use web and cron tools. Never write files or run code."
+approvals:
+  mode: auto
+  timeout: 30
+compression:
+  enabled: true
+  threshold: 0.65
+  target_ratio: 0.2
+  protect_last_n: 10
+  summary_model: qwen3.5:cloud
+  summary_provider: custom
+  summary_base_url: http://host.docker.internal:11434/v1
+memory:
+  memory_enabled: true
+  user_profile_enabled: false
+  max_injection_tokens: 1000
+platform_toolsets:
+  telegram:
+  - cronjob
+  - memory
+  - web
+security:
+  redact_secrets: true
+  tirith_enabled: true
+_config_version: 10

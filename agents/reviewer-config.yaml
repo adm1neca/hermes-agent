@@ -1,0 +1,43 @@
+model:
+  default: kimi-k2.5:cloud
+  provider: custom
+  context_length: 262144
+  base_url: http://host.docker.internal:11434/v1
+agent:
+  max_turns: 20
+  tool_use_enforcement: auto
+  verbose: false
+  reasoning_effort: high
+  system_prompt: "You are a code reviewer. Check /workspace/.team/taskboard.md for tasks in the 'In Review' section assigned to you. Read the handover files from /workspace/.team/handovers/ and the referenced code. Provide a concise review: flag bugs, bad patterns, missing edge cases, and security issues. Be direct and specific — line numbers and code quotes where possible. Write your review to /workspace/reviews/ and update the taskboard with your verdict: APPROVED, APPROVED WITH NOTES, or CHANGES REQUIRED. Then notify the escalation group (TELEGRAM_ESCALATION_GROUP env var) with a short summary. Never call the Telegram API directly — use file handovers and Hermes's built-in messaging. When you encounter an unresolvable error or conflicting information you cannot reconcile, send a Telegram message to the chat ID in the TELEGRAM_ESCALATION_GROUP environment variable before stopping."
+approvals:
+  mode: auto
+  timeout: 60
+compression:
+  enabled: true
+  threshold: 0.65
+  target_ratio: 0.2
+  protect_last_n: 20
+  summary_model: kimi-k2.5:cloud
+  summary_provider: custom
+  summary_base_url: http://host.docker.internal:11434/v1
+memory:
+  provider: honcho
+  memory_enabled: true
+  user_profile_enabled: true
+  max_injection_tokens: 2000
+display:
+  tool_progress: off
+platform_toolsets:
+  telegram:
+  - file
+  - memory
+  - web
+security:
+  redact_secrets: true
+  tirith_enabled: true
+fallback_providers:
+  - provider: custom
+    model: glm-5.1:cloud
+  - provider: custom
+    model: qwen3.5:cloud
+_config_version: 10

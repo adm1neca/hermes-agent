@@ -50,6 +50,11 @@ if [ "$(id -u)" = "0" ]; then
         chmod 640 "$HERMES_HOME/config.yaml" 2>/dev/null || true
     fi
 
+    # Make Docker socket accessible after privilege drop (Docker-in-Docker)
+    if [ -S /var/run/docker.sock ]; then
+        chmod 666 /var/run/docker.sock 2>/dev/null || true
+    fi
+
     echo "Dropping root privileges"
     exec gosu hermes "$0" "$@"
 fi
@@ -71,8 +76,13 @@ if [ ! -f "$HERMES_HOME/.env" ]; then
     cp "$INSTALL_DIR/.env.example" "$HERMES_HOME/.env"
 fi
 
-# config.yaml
-if [ ! -f "$HERMES_HOME/config.yaml" ]; then
+# config.yaml — agent-specific config is the single source of truth.
+# HERMES_AGENT_CONFIG (e.g. "coding-config.yaml") points to a file under
+# $INSTALL_DIR/agents/.  When set, it is copied into the volume on every
+# start so the repo config always wins over runtime drift.
+if [ -n "$HERMES_AGENT_CONFIG" ] && [ -f "$INSTALL_DIR/agents/$HERMES_AGENT_CONFIG" ]; then
+    cp "$INSTALL_DIR/agents/$HERMES_AGENT_CONFIG" "$HERMES_HOME/config.yaml"
+elif [ ! -f "$HERMES_HOME/config.yaml" ]; then
     cp "$INSTALL_DIR/cli-config.yaml.example" "$HERMES_HOME/config.yaml"
 fi
 

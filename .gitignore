@@ -12,6 +12,10 @@ __pycache__/
 .env.production.local
 .env.development
 .env.test
+# Per-agent secret env files (Telegram tokens, Honcho API keys)
+agents/*.env
+# Claude Code local permission cache
+.claude/
 export*
 __pycache__/model_tools.cpython-310.pyc
 __pycache__/web_tools.cpython-310.pyc

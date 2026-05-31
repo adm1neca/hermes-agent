@@ -1,0 +1,17 @@
+{
+  "approved": [],
+  "rejected": [],
+  "feedback": [],
+  "_schema": {
+    "approved_entry": {
+      "date": "YYYY-MM-DD",
+      "recipe_name": "",
+      "recipe_id": null,
+      "cooking_time": null,
+      "ingredients": [],
+      "product_ids": {},
+      "notes": ""
+    },
+    "_comment": "product_ids maps ingredient name to AH product ID for instant repeat ordering"
+  }
+}

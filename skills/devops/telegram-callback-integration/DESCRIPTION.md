@@ -1,0 +1,1 @@
+Telegram platform adapter integration patterns for custom callback handlers.

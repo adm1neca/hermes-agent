@@ -15593,9 +15593,9 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
                 logger.debug("Could not write takeover marker: %s", e)
             try:
                 terminate_pid(existing_pid, force=False)
-            except ProcessLookupError:
-                pass  # Already gone
-            except (PermissionError, OSError):
+            except (ProcessLookupError, OSError):
+                pass  # Already gone or invalid PID on Windows
+            except PermissionError:
                 logger.error(
                     "Permission denied killing PID %d. Cannot replace.",
                     existing_pid,

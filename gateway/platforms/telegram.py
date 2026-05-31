@@ -2105,7 +2105,7 @@ class TelegramAdapter(BasePlatformAdapter):
     async def _handle_callback_query(
         self, update: "Update", context: "ContextTypes.DEFAULT_TYPE"
     ) -> None:
-        """Handle inline keyboard button clicks."""
+        """Handle inline keyboard button clicks (model picker, approvals, update prompts, and paper-digest feedback)."""
         query = update.callback_query
         if not query or not query.data:
             return
@@ -2285,8 +2285,17 @@ class TelegramAdapter(BasePlatformAdapter):
             return
 
         # --- Update prompt callbacks ---
-        if not data.startswith("update_prompt:"):
+        if data.startswith("update_prompt:"):
+            await self._handle_update_prompt_callback(query, data)
             return
+        
+        # Handle paper-digest feedback (accept/reject/rate)
+        if data.startswith(("accept:", "reject:", "rate:")):
+            await self._handle_paper_feedback_callback(query, data)
+            return
+    
+    async def _handle_update_prompt_callback(self, query, data: str) -> None:
+        """Handle update prompt Yes/No callbacks."""
         answer = data.split(":", 1)[1]  # "y" or "n"
         caller_id = str(getattr(query.from_user, "id", ""))
         if not self._is_callback_user_authorized(
@@ -2299,7 +2308,6 @@ class TelegramAdapter(BasePlatformAdapter):
             await query.answer(text="⛔ You are not authorized to answer update prompts.")
             return
         await query.answer(text=f"Sent '{answer}' to the update process.")
-        # Edit the message to show the choice and remove buttons
         label = "Yes" if answer == "y" else "No"
         try:
             await query.edit_message_text(
@@ -2321,6 +2329,97 @@ class TelegramAdapter(BasePlatformAdapter):
                         answer, getattr(query.from_user, "id", "unknown"))
         except Exception as exc:
             logger.error("Failed to write update response from callback: %s", exc)
+    
+    async def _handle_paper_feedback_callback(self, query, data: str) -> None:
+        """Handle paper-digest feedback callbacks (thumbs up/down ratings)."""
+        try:
+            # Parse callback data: "accept:PAPER_ID", "reject:PAPER_ID", or "rate:PAPER_ID:RATING"
+            parts = data.split(":")
+            action = parts[0]
+            paper_id = parts[1] if len(parts) > 1 else None
+            
+            if not paper_id:
+                await query.answer("Invalid feedback format")
+                return
+            
+            # Import paper-digest database (lazy import)
+            try:
+                import sys
+                from pathlib import Path
+                
+                # Find paper-digest database - check common locations
+                db_paths = [
+                    Path("/workspace/paper-digest/paper-digest/data/papers.db"),
+                    Path.home() / ".paper-digest" / "data" / "papers.db",
+                    Path(__file__).parent.parent.parent.parent / "paper-digest" / "data" / "papers.db",
+                ]
+                
+                # Also check environment variable
+                db_env = os.environ.get("PAPER_DIGEST_DB")
+                if db_env:
+                    db_paths.insert(0, Path(db_env))
+                
+                db = None
+                for db_path in db_paths:
+                    if db_path.exists():
+                        # Try to import paper-digest module
+                        pd_path = db_path.parent.parent
+                        if (pd_path / "paper_digest").exists():
+                            sys.path.insert(0, str(pd_path))
+                            from paper_digest.storage.db import PaperDatabase
+                            db = PaperDatabase(str(db_path))
+                            break
+                
+                if not db:
+                    await query.answer("Feedback saved (no database connected)")
+                    logger.warning("Paper-digest database not found for feedback")
+                    return
+                
+                # Get paper info for category
+                paper = db.get_paper(paper_id)
+                if not paper:
+                    await query.answer("Paper not found")
+                    logger.warning(f"Paper {paper_id} not found in database")
+                    return
+                
+                # Extract category
+                categories = paper.get("categories", "[]")
+                if isinstance(categories, str):
+                    import json
+                    categories = json.loads(categories)
+                category = f"arxiv:{categories[0]}" if categories else "arxiv:unknown"
+                
+                # Record feedback
+                if action == "rate" and len(parts) > 2:
+                    rating = int(parts[2])
+                    db.record_feedback(paper_id, category, "accept" if rating >= 4 else "reject", rating=rating)
+                    emoji = "👍" if rating >= 4 else ("👎" if rating <= 2 else "👌")
+                    stars = "⭐" * rating
+                    await query.answer(f"{emoji} Saved: {stars}")
+                elif action == "accept":
+                    db.record_feedback(paper_id, category, "accept")
+                    await query.answer("👍 Saved! This improves recommendations.")
+                elif action == "reject":
+                    db.record_feedback(paper_id, category, "reject")
+                    await query.answer("👎 Skipped. Recommendations will improve.")
+                else:
+                    # New callback format for star ratings - treat as accept
+                    db.record_feedback(paper_id, category, "accept")
+                    await query.answer("✓ Saved")
+                
+                logger.info(f"Recorded {action} feedback for paper {paper_id} from Telegram")
+                db.close()
+                
+            except Exception as db_error:
+                logger.error(f"Failed to record paper feedback: {db_error}")
+                await query.answer("Saved (database error)")
+                
+        except Exception as e:
+            logger.error(f"Error handling paper feedback callback: {e}", exc_info=True)
+            try:
+                await query.answer("Error processing feedback")
+            except:
+                pass
 
     def _missing_media_path_error(self, label: str, path: str) -> str:
         """Build an actionable file-not-found error for gateway MEDIA delivery.

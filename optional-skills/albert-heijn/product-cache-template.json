@@ -1,0 +1,5 @@
+{
+  "_comment": "Product ID cache. Grows automatically as your agent discovers products. Copy to product-cache.json.",
+  "basics": {},
+  "ingredients": {}
+}

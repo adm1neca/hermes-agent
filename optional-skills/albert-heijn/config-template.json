@@ -1,0 +1,27 @@
+{
+  "_comment": "Copy this to config.json and adjust to your preferences",
+
+  "meals_per_week": 3,
+  "max_cooking_time_minutes": 30,
+  "household_size": 2,
+  "shopping_day": "friday",
+  "proposal_day": "thursday",
+  "proposal_time": "09:00",
+
+  "preferences": {
+    "healthy": true,
+    "prefer_bonus": true,
+    "prefer_seasonal": true,
+    "budget_conscious": false
+  },
+
+  "dislikes": [],
+  "allergies": [],
+
+  "butcher_items": [],
+
+  "cuisine_preferences": {
+    "liked": [],
+    "disliked": []
+  }
+}

@@ -217,8 +217,17 @@ def _get_profiles_root() -> Path:
     In Docker/custom deployments where HERMES_HOME points outside
     ``~/.hermes``, profiles live under ``HERMES_HOME/profiles/`` so
     they persist on the mounted volume.
+
+    Windows fallback: if HERMES_HOME is set to a legacy path (e.g.
+    AppData/Local/hermes) but profiles were created under ~/.hermes/profiles
+    (the old hardcoded location), fall back to ~/.hermes/profiles so
+    existing profiles remain visible.
     """
-    return _get_default_hermes_home() / "profiles"
+    computed = _get_default_hermes_home() / "profiles"
+    native = Path.home() / ".hermes" / "profiles"
+    if not computed.is_dir() and native.is_dir():
+        return native
+    return computed
 
 
 def _get_default_hermes_home() -> Path:

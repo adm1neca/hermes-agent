@@ -13,6 +13,7 @@ import os
 import select
 import shlex
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -548,27 +549,49 @@ class BaseEnvironment(ABC):
                 return
             idle_after_exit = 0
             try:
-                while True:
-                    try:
-                        ready, _, _ = select.select([fd], [], [], 0.1)
-                    except (ValueError, OSError):
-                        break  # fd already closed
-                    if ready:
+                if sys.platform == "win32":
+                    # Windows patch: select.select() raises WinError 10093 on
+                    # anonymous pipe FDs (only sockets are supported), so the
+                    # POSIX drain below exits immediately and stdout is lost.
+                    # Use a blocking os.read() loop instead — for the
+                    # docker/ssh backends pilot uses, the pipe EOFs cleanly
+                    # when the remote subprocess exits.  Grandchild-holds-pipe
+                    # (the original reason for select) is rare on Windows
+                    # because the local backend mostly runs inside Linux
+                    # containers there; if it bites, the proc.wait() timeout
+                    # still bounds the worst case.  Upstream tracking:
+                    # NousResearch/hermes-agent#16426 + PR #13838 (CONFLICTING,
+                    # unmerged).
+                    while True:
                         try:
                             chunk = os.read(fd, 4096)
                         except (ValueError, OSError):
                             break
                         if not chunk:
-                            break  # true EOF — all writers closed
+                            break  # EOF — pipe closed
                         output_chunks.append(decoder.decode(chunk))
-                        idle_after_exit = 0
-                    elif proc.poll() is not None:
-                        # bash is gone and the pipe was idle for ~100ms.  Give
-                        # it two more cycles to catch any buffered tail, then
-                        # stop — otherwise we wait forever on a grandchild pipe.
-                        idle_after_exit += 1
-                        if idle_after_exit >= 3:
-                            break
+                else:
+                    while True:
+                        try:
+                            ready, _, _ = select.select([fd], [], [], 0.1)
+                        except (ValueError, OSError):
+                            break  # fd already closed
+                        if ready:
+                            try:
+                                chunk = os.read(fd, 4096)
+                            except (ValueError, OSError):
+                                break
+                            if not chunk:
+                                break  # true EOF — all writers closed
+                            output_chunks.append(decoder.decode(chunk))
+                            idle_after_exit = 0
+                        elif proc.poll() is not None:
+                            # bash is gone and the pipe was idle for ~100ms.  Give
+                            # it two more cycles to catch any buffered tail, then
+                            # stop — otherwise we wait forever on a grandchild pipe.
+                            idle_after_exit += 1
+                            if idle_after_exit >= 3:
+                                break
             finally:
                 # Flush any bytes buffered mid-sequence.  With ``errors="replace"``
                 # this emits U+FFFD for any final incomplete sequence rather than

@@ -1,0 +1,1 @@
+Albert Heijn (AH) grocery shopping integration for the Netherlands. Search products, check weekly bonus deals, manage shopping lists, discover Allerhande recipes, and track purchase history. Requires OAuth login via browser.

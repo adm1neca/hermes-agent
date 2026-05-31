@@ -1815,6 +1815,9 @@ class AIAgent:
             short_uuid = uuid.uuid4().hex[:6]
             self.session_id = f"{timestamp_str}_{short_uuid}"
         
+        # Set Mission Control session ID for cost tracking
+        os.environ["MISSION_CONTROL_SESSION_ID"] = self.session_id
+        
         # Session logs go into ~/.hermes/sessions/ alongside gateway sessions
         hermes_home = get_hermes_home()
         self.logs_dir = hermes_home / "sessions"
@@ -12443,6 +12446,23 @@ class AIAgent:
                                     "Token persistence failed (session=%s, tokens=%d): %s",
                                     self.session_id, total_tokens, e,
                                 )
+                        
+                        # Report to Mission Control for cost tracking
+                        try:
+                            from mission_control_reporter import report_usage
+                            report_usage(
+                                model=self.model,
+                                input_tokens=canonical_usage.input_tokens,
+                                output_tokens=canonical_usage.output_tokens,
+                                cache_read_tokens=canonical_usage.cache_read_tokens,
+                                cache_write_tokens=canonical_usage.cache_write_tokens,
+                                reasoning_tokens=canonical_usage.reasoning_tokens,
+                                estimated_cost_usd=float(cost_result.amount_usd) if cost_result.amount_usd else None,
+                                provider=self.provider,
+                                base_url=self.base_url,
+                            )
+                        except Exception:
+                            pass  # never block the agent loop
                         
                         if self.verbose_logging:
                             logging.debug(f"Token usage: prompt={usage_dict['prompt_tokens']:,}, completion={usage_dict['completion_tokens']:,}, total={usage_dict['total_tokens']:,}")
