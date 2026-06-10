@@ -1,0 +1,7 @@
+FROM hermes-sandbox:rtk
+
+# Google API libs needed for podcast pipeline (Drive, Sheets, etc.)
+RUN pip install --no-cache-dir \
+    google-api-python-client \
+    google-auth-oauthlib \
+    google-auth-httplib2

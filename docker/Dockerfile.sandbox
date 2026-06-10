@@ -1,5 +1,8 @@
 FROM nikolaik/python-nodejs:python3.11-nodejs20
 
+# Install Docker CLI so agents can run docker commands via the mounted socket
+COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/docker
+
 # Install git and common dev tools
 RUN apt-get update && apt-get install -y --no-install-recommends git curl && rm -rf /var/lib/apt/lists/*
 

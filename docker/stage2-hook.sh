@@ -231,4 +231,12 @@ if [ -z "${AGENT_BROWSER_EXECUTABLE_PATH:-}" ] && \
     fi
 fi
 
+# --- Docker socket access ---
+# Make the socket world-writable so the hermes user (non-root, not in
+# docker group) can call docker commands for terminal backend and tools.
+# Only applied when the socket is bind-mounted; silently skipped otherwise.
+if [ -S /var/run/docker.sock ]; then
+    chmod 666 /var/run/docker.sock || true
+fi
+
 echo "[stage2] Setup complete; starting user services"

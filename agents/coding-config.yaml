@@ -16,9 +16,10 @@ terminal:
   backend: docker
   cwd: .
   timeout: 180
-  docker_image: nikolaik/python-nodejs:python3.11-nodejs20
+  docker_image: hermes-sandbox:rtk
   docker_volumes:
     - "E:/GITHUB/projects/hermes-data/workspace:/workspace"
+    - "//var/run/docker.sock:/var/run/docker.sock"
   env_passthrough:
     - GITHUB_TOKEN
   persistent_shell: true
