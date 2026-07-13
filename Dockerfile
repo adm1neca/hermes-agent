@@ -170,6 +170,13 @@ RUN npm install --prefer-offline --no-audit && \
 # image update and recall/retain then fails with
 # `ModuleNotFoundError: No module named 'hindsight_client'` (#38128).
 #
+# The honcho memory provider's SDK (honcho-ai) is baked in for the same
+# reason as hindsight: our three local agents run memory.provider=honcho,
+# and relying on the first-use lazy install into /opt/data/lazy-packages
+# means a fresh profile silently loses Honcho until something triggers
+# ensure("memory.honcho") — `hermes honcho status` just reports
+# "honcho-ai is not installed" (local patch; upstream excludes it).
+#
 # The Matrix gateway's deps ([matrix] extra) are baked in because
 # python-olm (transitive via mautrix[encryption]) builds from source on
 # Python/image combinations without usable wheels.  The Docker image is
@@ -180,7 +187,7 @@ RUN npm install --prefer-offline --no-audit && \
 # The editable link is created after the source copy below.
 COPY pyproject.toml uv.lock ./
 RUN touch ./README.md
-RUN uv sync --frozen --no-install-project --extra all --extra messaging --extra anthropic --extra bedrock --extra azure-identity --extra hindsight --extra matrix
+RUN uv sync --frozen --no-install-project --extra all --extra messaging --extra anthropic --extra bedrock --extra azure-identity --extra hindsight --extra honcho --extra matrix
 
 # ---------- Frontend build (cached independently from Python source) ----------
 # Copy only the frontend source trees first so that Python-only changes don't
