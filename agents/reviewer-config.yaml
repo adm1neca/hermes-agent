@@ -12,6 +12,12 @@ agent:
 approvals:
   mode: auto
   timeout: 60
+terminal:
+  backend: local
+  cwd: .
+  timeout: 180
+  env_passthrough:
+    - GITHUB_TOKEN
 compression:
   enabled: true
   threshold: 0.65

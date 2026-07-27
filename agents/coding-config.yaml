@@ -20,8 +20,9 @@ terminal:
   docker_volumes:
     - "E:/GITHUB/projects/hermes-data/workspace:/workspace"
     - "//var/run/docker.sock:/var/run/docker.sock"
-  env_passthrough:
+  docker_forward_env:
     - GITHUB_TOKEN
+  docker_run_as_host_user: true
   persistent_shell: true
   lifetime_seconds: 300
 compression:
