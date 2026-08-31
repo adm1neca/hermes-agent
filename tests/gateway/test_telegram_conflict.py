@@ -198,11 +198,6 @@ async def test_current_generation_conflicts_accumulate_after_start_returns(monke
             verifier.cancel()
             await asyncio.gather(verifier, return_exceptions=True)
 
-    # connect() now starts a lifetime _polling_heartbeat_loop task. With
-    # asyncio.sleep mocked to instant above, it must not be left running or it
-    # busy-spins on the event loop and starves the test. Cancel it explicitly.
-    await _cancel_heartbeat(adapter)
-
 
 @pytest.mark.asyncio
 async def test_polling_conflict_becomes_fatal_after_retries(monkeypatch):

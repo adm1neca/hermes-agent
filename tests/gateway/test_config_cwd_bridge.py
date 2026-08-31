@@ -280,11 +280,6 @@ class TestNestedTerminalCwdPlaceholderSkip:
         result = _simulate_config_bridge(cfg)
         assert result["TERMINAL_HOME_MODE"] == "profile"
 
-    def test_terminal_home_mode_bridges_to_env(self):
-        cfg = {"terminal": {"home_mode": "profile"}}
-        result = _simulate_config_bridge(cfg)
-        assert result["TERMINAL_HOME_MODE"] == "profile"
-
 
 class TestTildeExpansion:
     """terminal.cwd values containing shell tilde must be expanded.

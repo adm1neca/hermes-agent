@@ -163,32 +163,6 @@ def _fire_kanban_lifecycle_hook(event: str, task_id: str, **fields: Any) -> None
         _log.debug("kanban lifecycle hook %s failed: %s", event, exc)
 
 
-
-def _fire_kanban_lifecycle_hook(event: str, task_id: str, **fields: Any) -> None:
-    """Fire a kanban lifecycle plugin hook, fully best-effort.
-
-    Called by the claim/complete/block transitions AFTER their write txn has
-    committed, so plugin code never runs while a SQLite write lock is held and
-    always observes durable board state. Any failure (plugins unavailable,
-    a plugin raising, import error) is swallowed — a misbehaving observer must
-    never break a board state transition.
-
-    ``profile_name`` is resolved from the active HERMES_HOME so dispatcher- and
-    worker-side hooks both carry the right profile without the caller plumbing
-    it through.
-    """
-    try:
-        from hermes_cli.plugins import invoke_hook
-        from hermes_cli.profiles import get_active_profile_name
-        try:
-            profile_name = get_active_profile_name()
-        except Exception:
-            profile_name = "default"
-        invoke_hook(event, task_id=task_id, profile_name=profile_name, **fields)
-    except Exception as exc:  # pragma: no cover - defensive
-        _log.debug("kanban lifecycle hook %s failed: %s", event, exc)
-
-
 # A running task's claim is valid for 15 minutes by default; after that the
 # next dispatcher tick reclaims it. Workers that outlive this window should
 # call ``heartbeat_claim(task_id)`` periodically. In practice most kanban

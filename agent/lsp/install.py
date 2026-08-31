@@ -353,7 +353,6 @@ def _install_pip(pkg: str, bin_name: str) -> Optional[str]:
         proc = _pip_install(
             ["--target", str(pip_target), "--quiet", pkg],
             timeout=300,
-            stdin=subprocess.DEVNULL,
         )
         if proc.returncode != 0:
             logger.warning(

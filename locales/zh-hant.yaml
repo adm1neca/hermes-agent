@@ -378,9 +378,6 @@ Future messages in this room will use that transcript until `/reset` or another 
   credits:
     not_logged_in:            "未登入 Nous Portal。登入後即可查看額度餘額並儲值。"
 
-  credits:
-    not_logged_in:            "未登入 Nous Portal。登入後即可查看額度餘額並儲值。"
-
   verbose:
     not_enabled:           "`/verbose` 指令未在訊息平台上啟用。\n\n請在 `config.yaml` 中啟用：\n```yaml\ndisplay:\n  tool_progress_command: true\n```"
     mode_off:              "⚙️ 工具進度：**OFF** — 不顯示任何工具活動。"
