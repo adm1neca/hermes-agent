@@ -8043,41 +8043,6 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
         # engages drain on the first tick.
         self._spawn_supervised(self._drain_control_watcher, "drain_control_watcher")
 
-        # Start background async-delegation watcher — drains completion events
-        # from delegate_task(background=true) subagents and injects each
-        # result back into its originating session as a new turn, covering the
-        # idle case where the subagent finishes with no agent turn running.
-        asyncio.create_task(self._async_delegation_watcher())
-
-        # Start the scale-to-zero idle watcher ONLY when this instance is opted
-        # in (the NAS "Labs" HERMES_SCALE_TO_ZERO stamp), messaging is
-        # relay-only/absent, and a wakeUrl is registered (decisions.md D1/D11/
-        # §3.4(1)). A non-opted instance never starts it, so behaviour is exactly
-        # as today. When armed, the watcher drives the relay dormant on sustained
-        # idle so the platform (Fly autostop:"suspend") can suspend the machine.
-        try:
-            if self._scale_to_zero_should_arm():
-                logger.info(
-                    "scale-to-zero: armed (idle timeout %.0fs) — watching for idle",
-                    self._scale_to_zero_idle_timeout_seconds(),
-                )
-                asyncio.create_task(self._scale_to_zero_watcher())
-            else:
-                # Surface WHY an OPTED-IN instance didn't arm (a non-opted instance
-                # not arming is normal — stay silent there). Without this, a failed
-                # arm is invisible and "why won't it suspend/wake?" needs a box-dive.
-                self._log_scale_to_zero_not_armed_reason()
-        except Exception:  # noqa: BLE001 - arming must never block startup
-            logger.debug("scale-to-zero: arm check failed at startup", exc_info=True)
-
-        # Start background drain-control watcher — reconciles the gateway's
-        # new-turn accept-state with the external ``.drain_request.json`` marker
-        # the dashboard begin/cancel-drain endpoint writes (Phase 2). A marker
-        # left behind by a prior instantiation (durable-volume restart, NS-570)
-        # is ignored via its instantiation epoch; only a current-epoch marker
-        # engages drain on the first tick.
-        asyncio.create_task(self._drain_control_watcher())
-
         logger.info("Press Ctrl+C to stop")
         
         return True
@@ -11528,27 +11493,6 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
             self._restore_session_model_override(session_key, snapshot)
         except Exception:
             logger.debug("Failed to restore one-turn model override", exc_info=True)
-
-    def _restore_moa_one_shot(self, event: "MessageEvent", quick_key: str) -> None:
-        """Revert a ``/moa <prompt>`` one-shot model override after its turn.
-
-        Called from the ``finally`` of the message-handling path so the revert
-        fires whether the turn succeeded, raised, or was interrupted. A no-op
-        unless ``event._moa_disable_after_turn`` is set. ``_moa_restore_override``
-        carries the prior per-session override (``None`` means the user had no
-        override, so the MoA override is cleared outright).
-        """
-        if not getattr(event, "_moa_disable_after_turn", False):
-            return
-        try:
-            _restore = getattr(event, "_moa_restore_override", None)
-            if _restore is None:
-                self._session_model_overrides.pop(quick_key, None)
-            else:
-                self._session_model_overrides[quick_key] = _restore
-            self._evict_cached_agent(quick_key)
-        except Exception:
-            pass
 
     async def _prepare_inbound_message_text(
         self,
@@ -17135,74 +17079,6 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
                 logger.debug("Async delegation watcher error: %s", e)
             await asyncio.sleep(interval)
 
-    def _enrich_async_delegation_routing(self, evt: dict) -> None:
-        """Fill platform/chat_id/thread_id/chat_type on an async-delegation event.
-
-        Async-delegation completion events only carry ``session_key`` (the
-        daemon worker has no access to the per-message routing metadata the
-        terminal background watcher captures at spawn time). Parse the
-        session_key into the routing fields ``_build_process_event_source``
-        expects. Best-effort: a CLI-origin event (empty session_key) is left
-        as-is and simply won't route on the gateway.
-        """
-        if evt.get("platform"):
-            return  # already enriched
-        parsed = _parse_session_key(evt.get("session_key", "") or "")
-        if not parsed:
-            return
-        evt["platform"] = parsed.get("platform", "")
-        evt["chat_type"] = parsed.get("chat_type", "")
-        evt["chat_id"] = parsed.get("chat_id", "")
-        if parsed.get("thread_id"):
-            evt["thread_id"] = parsed["thread_id"]
-
-    async def _async_delegation_watcher(self, interval: float = 2.0) -> None:
-        """Drain async-delegation completions and inject them as new turns.
-
-        Background subagents (``delegate_task(background=true)``) run on the
-        async-delegation daemon executor — they have no per-process watcher
-        task, so their completion events would only be seen by the post-turn
-        queue drain. This watcher covers the IDLE case: when a background
-        subagent finishes while no agent turn is running, its result still
-        re-enters the originating session promptly.
-
-        Mirrors the CLI's idle ``process_loop`` drain. Stays silent when the
-        queue has nothing for us; ignores non-async event types (those are
-        handled by ``_run_process_watcher`` / the post-turn drain).
-        """
-        await asyncio.sleep(3)  # let platforms finish connecting
-        from tools.process_registry import process_registry as _pr
-        while self._running:
-            try:
-                # Peek the queue for async-delegation events. We must NOT
-                # consume watch/completion events here (other drains own them),
-                # so requeue anything that isn't ours.
-                requeue = []
-                async_events = []
-                while not _pr.completion_queue.empty():
-                    try:
-                        evt = _pr.completion_queue.get_nowait()
-                    except Exception:
-                        break
-                    if evt.get("type") == "async_delegation":
-                        async_events.append(evt)
-                    else:
-                        requeue.append(evt)
-                for evt in requeue:
-                    _pr.completion_queue.put(evt)
-                for evt in async_events:
-                    self._enrich_async_delegation_routing(evt)
-                    synth_text = _format_gateway_process_notification(evt)
-                    if not synth_text:
-                        continue
-                    try:
-                        await self._inject_watch_notification(synth_text, evt)
-                    except Exception as e:
-                        logger.error("Async delegation injection error: %s", e)
-            except Exception as e:
-                logger.debug("Async delegation watcher error: %s", e)
-            await asyncio.sleep(interval)
-
     async def _run_process_watcher(self, watcher: dict) -> None:
         """
         Periodically check a background process and push updates to the user.
@@ -18172,81 +18048,6 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
             home_display,
         )
         return hashlib.sha256(repr(key_tuple).encode("utf-8")).hexdigest()
-
-    async def _refresh_agent_cache_message_count(
-        self, session_key: str, session_id: Optional[str]
-    ) -> None:
-        """Re-baseline a cached agent's stored message_count after THIS turn.
-
-        The cross-process coherence guard (#45966) compares the session's
-        on-disk ``message_count`` against the count snapshotted next to the
-        cached agent, and rebuilds the agent on a mismatch.  But the snapshot
-        is taken at agent-BUILD time — before this turn writes its own user +
-        assistant (+ tool) rows — and the cache entry is never rewritten on a
-        reuse.  So without this re-baseline, THIS process's own turn would
-        grow ``message_count`` and the very next turn would see a mismatch
-        and rebuild the agent — every turn, for every conversation — silently
-        destroying the per-conversation prompt caching the cache exists to
-        protect.
-
-        Call this once a turn has completed and the agent has flushed its
-        rows to the SessionDB.  It snapshots the now-current count (which
-        includes this process's own writes) so the guard only fires when a
-        DIFFERENT process changes the transcript out from under us.  The
-        ``_sig`` is left untouched; only the count element is refreshed, and
-        only when the same agent is still cached (no rebuild/eviction raced
-        in between).  Fail-safe: any DB error leaves the snapshot as-is, which
-        at worst costs one unnecessary rebuild on the next turn.
-
-        When the cache entry records a ``session_id`` (4-tuple form, #54947)
-        that differs from the current ``session_id`` — meaning the cache
-        was built for a DIFFERENT conversation under the same ``session_key``
-        — the snapshot is intentionally left untouched.  Overwriting it with
-        the current session's count would corrupt the original conversation's
-        baseline and cause the next switch back to fire the cross-process
-        guard spuriously.  Fail-safe: the legacy 3-tuple shape (no
-        ``session_id``) is still re-baselined as before.
-        """
-        if self._session_db is None or not session_id:
-            return
-        _cache_lock = getattr(self, "_agent_cache_lock", None)
-        _cache = getattr(self, "_agent_cache", None)
-        if not _cache_lock or _cache is None:
-            return
-        try:
-            _sess_row = await self._session_db.get_session(session_id)
-            _live = _sess_row.get("message_count", 0) if _sess_row else None
-        except Exception:
-            return
-        if _live is None:
-            return
-        with _cache_lock:
-            cached = _cache.get(session_key)
-            # Only re-baseline a live 3-tuple entry; skip pending sentinels,
-            # legacy 2-tuples (they intentionally opt out of the guard), and
-            # the case where the entry was evicted/rebuilt mid-turn.
-            if (
-                isinstance(cached, tuple)
-                and len(cached) > 2
-                and cached[0] is not _AGENT_PENDING_SENTINEL
-            ):
-                # If the snapshot was taken for a different session_id
-                # (same session_key, different conversation), leave the
-                # snapshot alone — the current session_id's count belongs
-                # to a different DB row (#54947).
-                _snapshot_sid = cached[3] if len(cached) > 3 else None
-                if _snapshot_sid is not None and _snapshot_sid != session_id:
-                    return
-                if cached[2] != _live:
-                    if _snapshot_sid is None:
-                        # Legacy 3-tuple: preserve the original 3-element
-                        # shape so existing entries stay compatible with
-                        # callers that index ``cached[2]`` directly.
-                        _cache[session_key] = (cached[0], cached[1], _live)
-                    else:
-                        _cache[session_key] = (
-                            cached[0], cached[1], _live, _snapshot_sid,
-                        )
 
     def _evict_cached_agent(self, session_key: str) -> None:
         """Remove a cached agent for a session (called on /new, /model, etc).
@@ -22642,9 +22443,9 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
                 logger.debug("Could not write takeover marker: %s", e)
             try:
                 terminate_pid(existing_pid, force=False)
-            except (ProcessLookupError, OSError):
-                pass  # Already gone or invalid PID on Windows
-            except PermissionError:
+            except ProcessLookupError:
+                pass  # Already gone
+            except (PermissionError, OSError):
                 logger.error(
                     "Permission denied killing PID %d. Cannot replace.",
                     existing_pid,
