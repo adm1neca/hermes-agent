@@ -1291,6 +1291,12 @@ def init_agent(
     except Exception:
         os.environ["HERMES_SESSION_ID"] = agent.session_id
 
+    # Mission Control reporter (local) reads MISSION_CONTROL_SESSION_ID from
+    # the env to attribute per-turn cost reports to this run.  Kept distinct
+    # from HERMES_SESSION_ID so MC tracking is opt-in via the local reporter
+    # module and won't surprise upstream-style deployments.
+    os.environ["MISSION_CONTROL_SESSION_ID"] = agent.session_id
+
     # Session logs go into ~/.hermes/sessions/ alongside gateway sessions
     hermes_home = get_hermes_home()
     agent.logs_dir = hermes_home / "sessions"

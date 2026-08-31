@@ -2821,69 +2821,6 @@ class TelegramAdapter(BasePlatformAdapter):
             self.name,
         )
 
-    def _disarm_ptb_retry_loop(self) -> None:
-        """Synchronously stop PTB's internal polling retry loop.
-
-        PTB wraps ``getUpdates`` in ``network_retry_loop`` with
-        ``max_retries=-1`` (retry forever).  When a ``TelegramError`` (including
-        a 409 ``Conflict``) fires, that loop calls our ``error_callback``
-        *synchronously*, then sleeps and re-checks ``while is_running()`` before
-        polling again.  Our ``error_callback`` only schedules an async recovery
-        task (``loop.create_task(...)``) and returns immediately, so PTB's loop
-        keeps polling while our handler concurrently runs
-        ``stop -> sleep -> start_polling``.  The two polling sessions overlap and
-        Telegram returns a fresh 409 — a self-inflicted conflict loop on a
-        ~31s cadence.
-
-        The loop is wired with ``is_running=lambda: updater.running`` and a
-        private ``stop_event`` (``do_action`` races that event and returns the
-        moment it is set).  Setting that event *synchronously inside the
-        callback* — before it returns — makes PTB's loop exit on its own next
-        tick instead of racing our recovery.  Our async handler then performs
-        the real ``await updater.stop()`` (idempotent) followed by
-        drain + ``start_polling()``, which builds a fresh ``stop_event`` so the
-        restart is not poisoned.
-
-        Best-effort and defensive: PTB names the attribute differently across
-        versions (``_Updater__polling_task_stop_event`` via name-mangling), so
-        we probe for both spellings.  If neither is found we do nothing and
-        fall back to the prior behaviour (async ``updater.stop()`` racing PTB) —
-        i.e. we never make things worse than before.
-
-        We deliberately do NOT fall back to flipping ``updater._running``:
-        ``stop()`` raises ``RuntimeError`` when ``running`` is already False and
-        our recovery handler guards its ``stop()`` call on ``running``, so
-        clearing the flag here would skip the real teardown and leave PTB's
-        stop_event uncleared — poisoning the subsequent ``start_polling()``.
-        The stop_event lever leaves ``_running`` True, so the handler's
-        ``await updater.stop()`` still runs, drains the polling task, and clears
-        the event for a clean restart.
-        """
-        updater = getattr(self._app, "updater", None) if self._app else None
-        if updater is None:
-            return
-        # Preferred (and only) lever: PTB's polling stop_event. Name-mangled on
-        # Updater, so probe both the mangled and unmangled spellings.
-        for attr in (
-            "_Updater__polling_task_stop_event",
-            "_polling_task_stop_event",
-        ):
-            stop_event = getattr(updater, attr, None)
-            if isinstance(stop_event, asyncio.Event):
-                if not stop_event.is_set():
-                    stop_event.set()
-                    logger.debug(
-                        "[%s] Disarmed PTB polling retry loop via %s",
-                        self.name, attr,
-                    )
-                return
-        logger.debug(
-            "[%s] Could not disarm PTB polling retry loop "
-            "(stop_event not found on this PTB version); "
-            "falling back to async stop()",
-            self.name,
-        )
-
     async def _handle_polling_conflict(self, error: Exception) -> None:
         if getattr(self, "_polling_teardown_started", False):
             return
@@ -4629,21 +4566,6 @@ class TelegramAdapter(BasePlatformAdapter):
                 safe_error,
             )
             return SendResult(success=False, error=safe_error)
-
-    def _truncate_stream_overflow_preview(self, content: str) -> str:
-        """Return a one-message preview for oversized streaming edits.
-
-        Streaming edits must keep targeting the original message. Splitting a
-        mid-stream preview creates continuation messages and moves the active
-        message id, so the next accumulated-token edit repeats the overflow
-        cycle (#48648). Final edits still use ``_edit_overflow_split`` to
-        deliver the complete response.
-        """
-        return self.truncate_message(
-            content,
-            self.MAX_MESSAGE_LENGTH,
-            len_fn=utf16_len,
-        )[0]
 
     def _truncate_stream_overflow_preview(self, content: str) -> str:
         """Return a one-message preview for oversized streaming edits.
