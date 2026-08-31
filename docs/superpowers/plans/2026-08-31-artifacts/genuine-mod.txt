@@ -1,0 +1,10 @@
+.gitignore
+Dockerfile
+agent/agent_init.py
+agent/conversation_loop.py
+docker/stage2-hook.sh
+gateway/run.py
+hermes_cli/profiles.py
+plugins/platforms/telegram/adapter.py
+tools/environments/base.py
+web/package.json
