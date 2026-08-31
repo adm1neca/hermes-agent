@@ -1,5 +1,5 @@
 model:
-  default: glm-5.1:cloud
+  default: kimi-k3:cloud
   provider: custom
   context_length: 131072
   base_url: http://host.docker.internal:11434/v1

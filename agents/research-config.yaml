@@ -1,5 +1,5 @@
 model:
-  default: glm-5.2:cloud
+  default: deepseek-v4-flash:cloud
   provider: custom
   context_length: 262144
   base_url: http://host.docker.internal:11434/v1
