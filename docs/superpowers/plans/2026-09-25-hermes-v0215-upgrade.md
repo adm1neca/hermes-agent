@@ -430,3 +430,21 @@ grep -H "_config_version" /e/GITHUB/projects/hermes-data/*/config.yaml   # 46
 2. `git checkout main && git reset --hard pre-v0.21.5-snapshot-2026-09-25`, rebuild the image (Task 6).
 3. Restore `hermes-data` and `.hermes` from `E:\GITHUB\backups\hermes-pre-v0215-2026-09-25\`. **Required:** v0.21's migrated `state.db` and config v46 are not guaranteed readable by v0.20.6. Restore the retired profiles only if also rolling back Task 2's intent.
 4. `up -d --force-recreate`; host-native: `git -C ~/.hermes/hermes-agent reset --hard e61592f1c1` or `hermes update` after the fork is reset. Force-pushing the fork is a user decision; don't do it automatically.
+
+---
+
+## Execution outcome (2026-09-25) — read this before reusing the plan
+
+Completed. Merge `8638faea2e` (2 parents), pushed to `origin`. All five bots on v0.21.5.
+
+**Where reality diverged from the plan:**
+
+1. **Decision 2 was wrong: `gateway.standalone: true` leaves pilot DOWN in a container.** `hermes_cli/container_boot.py` registers named s6 slots but never boots them. One multiplexing root gateway per container is the only container topology. A standalone profile is excluded from the multiplexer AND never started. Removed the key; the default gateway now multiplexes pilot (`✓ telegram connected (profile: pilot)`, cron ticks `['default', 'pilot']`).
+2. **`docker compose stop -t 60` is not a graceful stop on its own.** s6-overlay's `S6_SERVICES_GRACETIME`/`S6_KILL_GRACETIME` default to 3000 ms and SIGKILL the gateway regardless. An unclean exit makes the next boot run `state_db_unclean_integrity_check`, which took ~20 min on research's 743 MB `state.db` (bot offline). `compose.hermes.local.yml` now sets `stop_grace_period: 60s` + both S6 vars to `"30000"` on all four Hermes services.
+3. **Parallel heavy jobs got reaped.** Backup + tests + image build as concurrent background shells exhausted RAM on the 16 GB host, and Claude Code killed all three. Run them one at a time; launch the image build and `hermes update` as detached `Start-Process cmd /c` jobs writing to a log.
+4. **Task 4 detail:** the original `MISSION_CONTROL_SESSION_ID` patch was unconditional, so it went in `_init_session_state()` after `_publish_session_id()`, not inside the root-only fallback.
+5. **Post-plan follow-ups (user-approved):** converted all 25 live WAL SQLite DBs to `journal_mode=delete` (`hermes sessions set-journal-mode delete --db …` from a throwaway container; it refuses on Windows without `--force`) and set `database.journal_mode: delete` in all five configs. Set default `terminal.backend: local` (it had never worked with `docker`, because the `hermes` container has no docker.sock).
+
+**Things that were fine and can be trusted next time:** the `git merge-tree` dry run predicted the exact 7 conflicts; take-theirs-then-reapply was fast in refactored files; RAG `_vendor` survived because Python stayed 3.13; the 4 `test_profiles.py` failures also fail on pure upstream (Windows host issues).
+
+**Next upgrade checklist additions:** `ls ~/.hermes/profiles/` (every dir gets multiplexed); `grep -c "extra hindsight" Dockerfile` must be 0; verify `S6_*_GRACETIME` still in compose; check that the `uv_source` Python minor is unchanged (RAG `_vendor`).
