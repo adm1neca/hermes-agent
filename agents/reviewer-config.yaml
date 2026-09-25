@@ -1,5 +1,5 @@
 model:
-  default: deepseek-v4-flash:cloud
+  default: deepseek-v4.1-flash:cloud
   provider: custom
   context_length: 262144
   base_url: http://host.docker.internal:11434/v1
@@ -23,7 +23,7 @@ compression:
   threshold: 0.65
   target_ratio: 0.2
   protect_last_n: 20
-  summary_model: kimi-k2.5:cloud
+  summary_model: glm-5.3-flash:cloud
   summary_provider: custom
   summary_base_url: http://host.docker.internal:11434/v1
 memory:
@@ -43,7 +43,7 @@ security:
   tirith_enabled: true
 fallback_providers:
   - provider: custom
-    model: glm-5.1:cloud
+    model: glm-5.2:cloud
   - provider: custom
-    model: qwen3.5:cloud
+    model: kimi-k3:cloud
 _config_version: 10
