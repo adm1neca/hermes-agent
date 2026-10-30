@@ -536,3 +536,22 @@ Check `rag-health`: the Chroma count must equal the bm25 `chunks_fts` row count.
 2. `git checkout main && git reset --hard pre-v0.22.5-snapshot-2026-10-29`, then rebuild the image (Task 7).
 3. Restore `hermes-data` and `.hermes` from `E:\GITHUB\backups\hermes-pre-v0225-2026-10-29\`. **This is required:** v0.22's migrated `state.db` and config are not guaranteed to be readable by v0.21.5. Restore `rag-data.tgz` into the volume only if it was re-vendored.
 4. `up -d --force-recreate`. For the host-native install, run `hermes update` after the fork is reset. **Force-pushing the fork is the user's decision**; never do it automatically.
+
+---
+
+## Execution outcome (2026-10-29/30) — read this before reusing the plan
+
+Completed. Merge `dbd4d03516` (2 parents, v0.22.5 = `bf0203a794`), plan doc `4bda44d6e6`, pushed to origin. All five bots on v0.22.5 with the Honcho plugin.
+
+**Where reality diverged from the plan:**
+1. **C: filled to 0 bytes mid-Task 9** → Docker engine HTTP 500. pm wrote a ~1 GB runtime into `C:\Users\Plamen\.hermes\installs` (gateway container) on top of pm test envs from `scripts/run_tests.sh`; the Docker vhdx (61 GB) also lives on C:. Recovered after the user freed space and restarted Docker; Honcho Postgres had shut down cleanly (row-hash diff 0 missing / 0 changed).
+2. **Honcho never auto-installed.** Two causes: (a) pm copies the toolchain into `/opt/data/installs/.../workspace`; its `share/terminfo` has case-twin dirs and `/opt/data` is NTFS over 9p → `Errno 17`. Fixed with per-service Docker volumes `installs-*` at `/opt/data/installs` (gateway+dashboard share `installs-default`). (b) Live catalog pin `2108daf` broken upstream (plastic-labs/honcho#1485). Installed `--ref e2d2aba1...` (v0.22.5 in-tree reviewed pin). Added `uvcache-*` volumes at `/opt/data/cache/uv` too: install time ~33 min → ~2.5 min.
+3. **Research crash-looped ~50 min** after the Docker restart: boot step `state_db_guard` (`PRAGMA integrity_check`) on its 883 MB `state.db` over 9p on the saturated E: HDD, holding a read lock. One-time per install identity; record at `installs/<hash>/bootstrap/<profile>.json`, which was seeded into the new volumes to avoid a rerun. A later `hermes doctor` stalled the same way and was killed.
+4. Python 3.13 → 3.14 (pm/lock.json): wiki-RAG `_vendor` re-vendored for cp314 (chromadb 1.5.9; old kept as `_vendor.cp313`); health 563/563 files, 15341 = 15341 chunks.
+5. Reviewer memory limit 512m → 1g (plugin build).
+
+**Pre-existing, found during verification (not caused by the upgrade):** Honcho server's OpenRouter key expired 2026-10-23 15:15 UTC (dialectic/deriver/embeddings 401); `GITHUB_TOKEN` expired for default/forge/reviewer; research `approvals.mode 'auto'` unknown (falls back to manual); pilot `custom_providers` entry not migrated to `providers:`.
+
+**Open follow-ups:** new Honcho OpenRouter key; `hermes plugins update honcho` once the catalog moves past 5ca089e; remove `.hermes\hermes-agent\venv\Scripts` from user PATH so the new `.hermes\bin` launcher wins; "automatic dependency repair retry limit reached" printed by every CLI call; leftover failed pm env on `C:\Users\Plamen\.hermes\installs\351f81cc06284494\environments` (1.1 GB) + old test envs; C: free space (~11 GB).
+
+**Next-upgrade checklist additions:** `df -h /c` first; check the live catalog honcho pin installs; keep `installs-*`/`uvcache-*` volumes and seed `bootstrap/` when recreating them; never run full-DB diagnostics (`doctor`) against research's state.db while the gateway is up.
