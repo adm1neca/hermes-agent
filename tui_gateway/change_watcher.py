@@ -425,6 +425,16 @@ def _broadcast_watched_changes(now: float | None = None) -> None:
             _broadcast_global_event(event, payload_fn())
 
 
+def _watch_pass() -> None:
+    """One watcher tick, skipped while no client can receive its events (no WS peer, not the stdio
+    TUI): the broadcasts would be dropped, and on a slow filesystem (Docker 9p bind mounts, ~3 ms per
+    stat) the skills walk alone outlasts its 2 s interval, so an idle gateway scanned nonstop."""
+    if not _live_transports and not _stdio_is_rpc_channel:
+        return
+    _broadcast_skin_if_changed()
+    _broadcast_watched_changes()
+
+
 _skin_watcher_started = False
 
 
@@ -440,8 +450,7 @@ def _ensure_skin_watcher() -> None:
     def _loop() -> None:
         while True:
             time.sleep(0.5)
-            _broadcast_skin_if_changed()
-            _broadcast_watched_changes()
+            _watch_pass()
     threading.Thread(target=_loop, name="hermes-change-watcher", daemon=True).start()
 
 
